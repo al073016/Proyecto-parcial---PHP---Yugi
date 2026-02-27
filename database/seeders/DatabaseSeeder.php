@@ -3,21 +3,34 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use App\Models\Item; // Importante: añade esta línea si no está
+use App\Models\Item;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // Esto creará tus 50 objetos aleatorios
+        // Creamos 50 objetos aleatorios de prueba
         Item::factory(50)->create();
 
-        // Esto crea un usuario de prueba para que tú y tu compañero puedan loguearse
+        // Usuario Administrador (Bibliotecario)
         User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-            'password' => bcrypt('password'), // Añade esto para que sepan la clave
+            'name'       => 'Admin Bibliotecario',
+            'email'      => 'admin@example.com',
+            'password'   => bcrypt('password'),
+            'rol'        => 'admin',
+            'bloqueado'  => false,
+            'reputacion' => 100,
+        ]);
+
+        // Usuario Alumno de prueba
+        User::factory()->create([
+            'name'       => 'Test Alumno',
+            'email'      => 'test@example.com',
+            'password'   => bcrypt('password'),
+            'rol'        => 'alumno',
+            'bloqueado'  => false,
+            'reputacion' => 100,
         ]);
     }
 }

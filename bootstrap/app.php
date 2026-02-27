@@ -12,7 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Registramos el alias 'es_admin' para proteger rutas de administrador
+        $middleware->alias([
+            'es_admin' => \App\Http\Middleware\EsAdmin::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // 1. Manejar errores 404 (Recurso no encontrado)

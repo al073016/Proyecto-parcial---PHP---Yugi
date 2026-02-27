@@ -1,7 +1,4 @@
 <?php
+// Este proyecto es una API REST pura.
+// Todas las rutas están en routes/api.php
 
-use Illuminate\Support\Facades\Route;
-
-Route::get('/', function () {
-    return view('welcome');
-});
