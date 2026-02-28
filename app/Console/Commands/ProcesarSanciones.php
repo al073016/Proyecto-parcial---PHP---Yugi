@@ -9,7 +9,10 @@ use Illuminate\Console\Command;
 
 class ProcesarSanciones extends Command
 {
-   
+    /**
+     * The name and signature of the console command.
+     * Se ejecuta con: php artisan prestamos:procesar-sanciones
+     */
     protected $signature = 'prestamos:procesar-sanciones';
 
     protected $description = 'Detecta préstamos atrasados, bloquea usuarios y actualiza estados a ATRASADO. Corre cada medianoche.';

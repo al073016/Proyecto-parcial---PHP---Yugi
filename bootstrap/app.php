@@ -18,41 +18,56 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        // 1. Manejar errores 404 (Recurso no encontrado)
-        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e, $request) {
-            if ($request->is('api/*')) {
-                return response()->json([
-                    'status'  => 'error',
-                    'message' => 'El recurso (ítem o préstamo) no existe en nuestra base de datos.',
-                    'code'    => 404
-                ], 404);
-            }
-        });
 
-        // 2. Manejar errores 405 (Método no permitido)
-        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException $e, $request) {
-            if ($request->is('api/*')) {
-                return response()->json([
-                    'status'  => 'error',
-                    'message' => 'Estás usando un método (POST/GET/PUT) no válido para esta ruta.',
-                    'code'    => 405
-                ], 405);
-            }
-        });
-
-        // 3. Manejar errores 500 o cualquier excepción inesperada
         $exceptions->render(function (\Throwable $e, $request) {
-            if ($request->is('api/*')) {
+            if (!$request->is('api/*')) {
+                return null; // Dejar que Laravel maneje rutas no-API normalmente
+            }
+
+            // 401 — Sin token o token inválido
+            if ($e instanceof \Illuminate\Auth\AuthenticationException) {
                 return response()->json([
                     'status'  => 'error',
-                    'message' => 'Ocurrió un error inesperado en el servidor.',
-                    'debug'   => config('app.debug') ? $e->getMessage() : 'Contacte al administrador',
-                    'code'    => 500
-                ], 500);
+                    'message' => 'No autenticado. Debes iniciar sesión y enviar tu token.',
+                    'code'    => 401,
+                ], 401);
             }
+
+            // Errores HTTP con código propio (403, 404, 405, 422, etc.)
+            if ($e instanceof \Symfony\Component\HttpKernel\Exception\HttpException) {
+                $code = $e->getStatusCode();
+
+                $mensajes = [
+                    403 => 'Acceso denegado. No tienes permisos para esta acción.',
+                    404 => 'El recurso solicitado no existe.',
+                    405 => 'Método HTTP no permitido para esta ruta.',
+                    422 => 'Los datos enviados no son válidos.',
+                ];
+
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => $mensajes[$code] ?? $e->getMessage(),
+                    'code'    => $code,
+                ], $code);
+            }
+
+            // Errores de validación (422)
+            if ($e instanceof \Illuminate\Validation\ValidationException) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => 'Error de validación.',
+                    'errors'  => $e->errors(),
+                    'code'    => 422,
+                ], 422);
+            }
+
+            // Cualquier otro error inesperado (500)
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Ocurrió un error inesperado en el servidor.',
+                'debug'   => config('app.debug') ? $e->getMessage() : 'Contacte al administrador',
+                'code'    => 500,
+            ], 500);
         });
+
     })->create();
-
-
-        
-        
