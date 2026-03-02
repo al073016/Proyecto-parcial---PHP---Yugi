@@ -2,8 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 
-// Documentación Swagger de la API
-// Accesible en: http://127.0.0.1:8000/docs
+// --- Documentación Swagger ---
 Route::get('/docs', function () {
     return file_get_contents(public_path('docs/index.html'));
 });
@@ -13,3 +12,19 @@ Route::get('/docs/swagger.json', function () {
         'Content-Type' => 'application/json',
     ]);
 });
+
+// --- Vistas de Autenticación ---
+Route::get('/login', function () {
+    return view('login');
+})->name('login');
+
+Route::get('/register', function () {
+    return view('register'); // Asegúrate de que el archivo se llame register.blade.php
+})->name('register');
+
+// --- Vistas de la Aplicación ---
+Route::get('/catalogo', function () {
+    return view('catalogo');
+});
+
+Route::view('/admin/dashboard', 'admin.dashboard');
