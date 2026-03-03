@@ -21,6 +21,14 @@ class ItemController extends Controller
             $query->where('estado', $request->estado);
         }
 
+        if ($request->has('categoria')) {
+            $query->where('categoria', $request->categoria);
+        }
+
+        if ($request->has('categoria')) {
+            $query->where('categoria', $request->categoria);
+        }
+
         $items = $query->get();
 
         return response()->json([
