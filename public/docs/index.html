@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>API Docs — Sistema de Préstamos</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui.min.css" />
+    <style>
+      body { margin: 0; background: #d6d6d6; }
+      .swagger-ui .topbar { background: #0f3460; padding: 10px 0; }
+      .swagger-ui .topbar .download-url-wrapper { display: none; }
+      .swagger-ui .info .title { color: #e94560; }
+      .topbar-title {
+        color: #e94560;
+        font-family: 'Segoe UI', sans-serif;
+        font-size: 1.2rem;
+        font-weight: 700;
+        padding: 0 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="topbar-title">🔧 Sistema de Préstamos — Documentación API</div>
+    </div>
+    <div id="swagger-ui"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui-bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui-standalone-preset.min.js"></script>
+    <script>
+      window.onload = () => {
+        SwaggerUIBundle({
+          url: "/docs/swagger.json",
+          dom_id: '#swagger-ui',
+          presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+          layout: "StandaloneLayout",
+          deepLinking: true,
+          displayRequestDuration: true,
+          filter: true,
+          tryItOutEnabled: true,
+          persistAuthorization: true,
+        });
+      };
+    </script>
+  </body>
+</html>

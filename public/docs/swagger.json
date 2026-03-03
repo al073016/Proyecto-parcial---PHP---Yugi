@@ -1,0 +1,555 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Sistema de Préstamos — API REST",
+    "description": "API para gestión de préstamos de objetos/activos. Permite registrar usuarios, autenticar, gestionar inventario y controlar el ciclo de vida de los préstamos.\n\n**Equipo Yugi Miembros:**\n\n→ Iván José Rodríguez Maldonado \n\n→ Ulises Zarate Concha\n\n**Roles disponibles:**\n- `admin` → Bibliotecario. Puede gestionar inventario, ver dashboard y completar mantenimientos.\n- `alumno` → Usuario normal. Puede solicitar préstamos y ver su historial.\n\n**Autenticación:** Bearer Token (Laravel Sanctum). Obtén tu token con `/api/login` y úsalo en el header `Authorization: Bearer {token}`.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8000",
+      "description": "Servidor local de desarrollo"
+    }
+  ],
+  "tags": [
+    { "name": "Autenticación", "description": "Registro, login y logout de usuarios" },
+    { "name": "Items", "description": "Gestión del inventario de objetos" },
+    { "name": "Préstamos", "description": "Solicitud y devolución de objetos" },
+    { "name": "Administración", "description": "Endpoints exclusivos para el rol admin" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Token obtenido del endpoint /api/login"
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id":         { "type": "integer", "example": 1 },
+          "name":       { "type": "string",  "example": "Carlos López" },
+          "email":      { "type": "string",  "example": "carlos@test.com" },
+          "rol":        { "type": "string",  "enum": ["admin", "alumno"], "example": "alumno" },
+          "bloqueado":  { "type": "boolean", "example": false },
+          "reputacion": { "type": "integer", "example": 100 }
+        }
+      },
+      "Item": {
+        "type": "object",
+        "properties": {
+          "id":            { "type": "integer", "example": 1 },
+          "nombre":        { "type": "string",  "example": "Taladro Bosch" },
+          "categoria":     { "type": "string",  "example": "Herramientas" },
+          "estado":        { "type": "string",  "enum": ["disponible", "prestado", "mantenimiento", "atrasado"], "example": "disponible" },
+          "vida_util_max": { "type": "integer", "example": 100 },
+          "uso_acumulado": { "type": "integer", "example": 12 },
+          "salud":         { "type": "integer", "example": 88, "description": "Porcentaje de vida útil restante (0-100)" }
+        }
+      },
+      "Loan": {
+        "type": "object",
+        "properties": {
+          "id":                        { "type": "integer", "example": 1 },
+          "item_id":                   { "type": "integer", "example": 1 },
+          "user_id":                   { "type": "integer", "example": 2 },
+          "fecha_prestamo":            { "type": "string",  "format": "date-time", "example": "2026-02-27T10:00:00Z" },
+          "fecha_devolucion_esperada": { "type": "string",  "format": "date",      "example": "2026-03-10" },
+          "fecha_devolucion_real":     { "type": "string",  "format": "date-time", "nullable": true, "example": null },
+          "estado_fisico_salida":      { "type": "string",  "enum": ["bueno", "regular", "malo"], "example": "bueno" },
+          "estado_fisico_entrada":     { "type": "string",  "enum": ["bueno", "regular", "malo"], "nullable": true, "example": null },
+          "monto_multa":               { "type": "number",  "example": 0.00 },
+          "user":                      { "$ref": "#/components/schemas/User" },
+          "item":                      { "$ref": "#/components/schemas/Item" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "status":  { "type": "string", "example": "error" },
+          "message": { "type": "string", "example": "Descripción del error" },
+          "code":    { "type": "integer", "example": 400 }
+        }
+      },
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "status":  { "type": "string", "example": "success" },
+          "message": { "type": "string", "example": "Operación exitosa" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/register": {
+      "post": {
+        "tags": ["Autenticación"],
+        "summary": "Registrar nuevo alumno",
+        "description": "Crea una nueva cuenta de alumno. El rol siempre será 'alumno' por defecto.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "email", "password", "password_confirmation"],
+                "properties": {
+                  "name":                  { "type": "string",  "example": "Carlos López" },
+                  "email":                 { "type": "string",  "example": "carlos@test.com" },
+                  "password":              { "type": "string",  "example": "password123", "minLength": 8 },
+                  "password_confirmation": { "type": "string",  "example": "password123" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Usuario registrado correctamente",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "success",
+                  "message": "Usuario registrado correctamente.",
+                  "access_token": "3|aBcDeFgH...",
+                  "token_type": "Bearer",
+                  "user": { "id": 3, "name": "Carlos López", "email": "carlos@test.com", "rol": "alumno", "bloqueado": false, "reputacion": 100 }
+                }
+              }
+            }
+          },
+          "422": { "description": "Error de validación (email duplicado, contraseñas no coinciden, etc.)" }
+        }
+      }
+    },
+    "/api/login": {
+      "post": {
+        "tags": ["Autenticación"],
+        "summary": "Iniciar sesión",
+        "description": "Autentica al usuario y devuelve un token Bearer. Usuarios de prueba:\n- Admin: `admin@example.com` / `password`\n- Alumno: `test@example.com` / `password`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email":    { "type": "string", "example": "admin@example.com" },
+                  "password": { "type": "string", "example": "password" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sesión iniciada correctamente",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "success",
+                  "message": "Sesión iniciada correctamente.",
+                  "access_token": "1|XyZaBc...",
+                  "token_type": "Bearer",
+                  "user": { "id": 1, "name": "Admin Bibliotecario", "email": "admin@example.com", "rol": "admin", "bloqueado": false, "reputacion": 100 }
+                }
+              }
+            }
+          },
+          "422": { "description": "Credenciales incorrectas" }
+        }
+      }
+    },
+    "/api/logout": {
+      "post": {
+        "tags": ["Autenticación"],
+        "summary": "Cerrar sesión",
+        "description": "Revoca el token actual. El token deja de funcionar inmediatamente.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Sesión cerrada",
+            "content": {
+              "application/json": {
+                "example": { "status": "success", "message": "Sesión cerrada correctamente." }
+              }
+            }
+          },
+          "401": { "description": "No autenticado" }
+        }
+      }
+    },
+    "/api/me": {
+      "get": {
+        "tags": ["Autenticación"],
+        "summary": "Ver perfil propio",
+        "description": "Devuelve los datos del usuario autenticado junto con sus préstamos activos.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Perfil del usuario",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "success",
+                  "data": {
+                    "id": 2, "name": "Test Alumno", "email": "test@example.com",
+                    "rol": "alumno", "bloqueado": false, "reputacion": 100,
+                    "prestamos_activos": []
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "No autenticado — token inválido o ausente" }
+        }
+      }
+    },
+    "/api/items": {
+      "get": {
+        "tags": ["Items"],
+        "summary": "Listar todos los objetos",
+        "description": "Devuelve el catálogo completo de objetos. Ruta pública, no requiere token. Se puede filtrar por estado.",
+        "parameters": [
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "description": "Filtrar por estado del objeto",
+            "schema": { "type": "string", "enum": ["disponible", "prestado", "mantenimiento", "atrasado"] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de objetos",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "success",
+                  "total": 50,
+                  "data": [
+                    { "id": 1, "nombre": "Taladro Bosch", "categoria": "Herramientas", "estado": "disponible", "vida_util_max": 100, "uso_acumulado": 12, "salud": 88 }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Items"],
+        "summary": "Agregar objeto al inventario",
+        "description": "Registra un nuevo objeto. **Solo Admin.**",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["nombre", "categoria", "vida_util_max"],
+                "properties": {
+                  "nombre":        { "type": "string",  "example": "Cámara Sony A7" },
+                  "categoria":     { "type": "string",  "example": "Electrónica" },
+                  "vida_util_max": { "type": "integer", "example": 200, "description": "Horas de uso máximo antes de mantenimiento" },
+                  "estado":        { "type": "string",  "example": "disponible", "description": "Opcional, por defecto 'disponible'" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Objeto creado",
+            "content": {
+              "application/json": {
+                "example": { "status": "success", "message": "Objeto registrado en el inventario.", "data": { "id": 51, "nombre": "Cámara Sony A7", "estado": "disponible", "salud": 100 } }
+              }
+            }
+          },
+          "401": { "description": "No autenticado" },
+          "403": { "description": "Acceso denegado — se requiere rol admin" }
+        }
+      }
+    },
+    "/api/items/{id}": {
+      "get": {
+        "tags": ["Items"],
+        "summary": "Ver detalle de un objeto",
+        "description": "Devuelve el detalle del objeto incluyendo su historial de préstamos. Ruta pública.",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" }, "example": 1 }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detalle del objeto",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "success",
+                  "data": {
+                    "id": 1, "nombre": "Taladro Bosch", "estado": "disponible", "salud": 88,
+                    "loans": [{ "id": 1, "user": { "name": "Test Alumno" } }]
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Objeto no encontrado" }
+        }
+      },
+      "put": {
+        "tags": ["Items"],
+        "summary": "Editar un objeto",
+        "description": "Actualiza los datos de un objeto del inventario. **Solo Admin.**",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" }, "example": 1 }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nombre":        { "type": "string",  "example": "Taladro Makita Pro" },
+                  "categoria":     { "type": "string",  "example": "Herramientas" },
+                  "estado":        { "type": "string",  "enum": ["disponible", "prestado", "mantenimiento", "atrasado"] },
+                  "vida_util_max": { "type": "integer", "example": 150 },
+                  "uso_acumulado": { "type": "integer", "example": 0 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Objeto actualizado" },
+          "403": { "description": "Acceso denegado" },
+          "404": { "description": "Objeto no encontrado" }
+        }
+      },
+      "delete": {
+        "tags": ["Items"],
+        "summary": "Eliminar un objeto",
+        "description": "Elimina un objeto del inventario. No se puede eliminar si está actualmente prestado. **Solo Admin.**",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" }, "example": 1 }
+        ],
+        "responses": {
+          "200": { "description": "Objeto eliminado" },
+          "400": { "description": "No se puede eliminar — el objeto está prestado" },
+          "403": { "description": "Acceso denegado" },
+          "404": { "description": "Objeto no encontrado" }
+        }
+      }
+    },
+    "/api/items/{id}/completar-mantenimiento": {
+      "post": {
+        "tags": ["Administración"],
+        "summary": "Completar mantenimiento de un objeto",
+        "description": "Marca un objeto como reparado: resetea el uso acumulado a 0 y lo devuelve al estado 'disponible'. El objeto debe estar en estado 'mantenimiento'. **Solo Admin.**",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" }, "example": 1 }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mantenimiento completado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "success",
+                  "message": "Mantenimiento completado. El objeto está disponible nuevamente.",
+                  "data": { "id": 1, "estado": "disponible", "uso_acumulado": 0, "salud": 100 }
+                }
+              }
+            }
+          },
+          "400": { "description": "El objeto no está en mantenimiento" },
+          "403": { "description": "Acceso denegado" }
+        }
+      }
+    },
+    "/api/loans": {
+      "get": {
+        "tags": ["Préstamos"],
+        "summary": "Ver historial de préstamos",
+        "description": "**Admin:** ve todos los préstamos con nombre real del alumno y del objeto.\n**Alumno:** solo ve sus propios préstamos.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Historial de préstamos",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "success",
+                  "total": 1,
+                  "data": [
+                    {
+                      "id": 1,
+                      "fecha_prestamo": "2026-02-27T10:00:00Z",
+                      "fecha_devolucion_esperada": "2026-03-10T00:00:00Z",
+                      "fecha_devolucion_real": null,
+                      "estado_fisico_salida": "bueno",
+                      "monto_multa": "0.00",
+                      "user": { "id": 2, "name": "Test Alumno", "email": "test@example.com" },
+                      "item": { "id": 1, "nombre": "Taladro Bosch", "estado": "prestado" }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "description": "No autenticado" }
+        }
+      },
+      "post": {
+        "tags": ["Préstamos"],
+        "summary": "Solicitar un préstamo",
+        "description": "Registra un nuevo préstamo. El sistema valida:\n- Que el objeto esté disponible\n- Que el alumno no esté bloqueado (por préstamos atrasados)\n- Que la fecha de devolución sea posterior a hoy",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["item_id", "fecha_devolucion_esperada"],
+                "properties": {
+                  "item_id":                   { "type": "integer", "example": 1 },
+                  "fecha_devolucion_esperada": { "type": "string",  "format": "date", "example": "2026-03-15" },
+                  "estado_fisico_salida":      { "type": "string",  "enum": ["bueno", "regular", "malo"], "example": "bueno", "description": "Opcional, por defecto 'bueno'" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Préstamo registrado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "success",
+                  "message": "Préstamo registrado exitosamente.",
+                  "data": {
+                    "prestamo_id": 1,
+                    "objeto": "Taladro Bosch",
+                    "alumno": "Test Alumno",
+                    "fecha_prestamo": "27-02-2026 10:00",
+                    "devolucion_esperada": "15-03-2026",
+                    "estado_fisico_salida": "bueno"
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Objeto no disponible (ya está prestado, en mantenimiento, etc.)" },
+          "401": { "description": "No autenticado" },
+          "403": { "description": "Alumno bloqueado por préstamos atrasados" }
+        }
+      }
+    },
+    "/api/loans/{id}": {
+      "put": {
+        "tags": ["Préstamos"],
+        "summary": "Devolver un objeto (check-in)",
+        "description": "Registra la devolución de un objeto. El sistema calcula automáticamente:\n- **Desgaste:** horas de uso acumuladas al objeto\n- **Mantenimiento:** si el objeto superó su vida útil pasa a estado 'mantenimiento'\n- **Multa:** $5 por día de retraso + $15 por daño regular + $50 por daño mayor\n- **Desbloqueo:** si el alumno no tiene más atrasos, se desbloquea automáticamente\n\nEl alumno solo puede devolver sus propios préstamos. El admin puede devolver cualquiera.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "description": "ID del préstamo a cerrar", "schema": { "type": "integer" }, "example": 1 }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["estado_fisico_entrada"],
+                "properties": {
+                  "estado_fisico_entrada": {
+                    "type": "string",
+                    "enum": ["bueno", "regular", "malo"],
+                    "example": "bueno",
+                    "description": "bueno=$0 multa | regular=$15 multa | malo=$50 multa"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Devolución registrada",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "success",
+                  "message": "Devolución registrada correctamente. El objeto está nuevamente disponible.",
+                  "data": {
+                    "item": "Taladro Bosch",
+                    "alumno": "Test Alumno",
+                    "horas_de_uso": 48,
+                    "uso_total_acumulado": 60,
+                    "vida_util_max": 100,
+                    "salud_restante": "40%",
+                    "estado_fisico_entrada": "bueno",
+                    "multa_aplicada": "$0.00",
+                    "nuevo_estado_objeto": "disponible"
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "No autenticado" },
+          "403": { "description": "No puedes devolver el préstamo de otro alumno" },
+          "404": { "description": "Préstamo no encontrado o ya fue devuelto" }
+        }
+      }
+    },
+    "/api/dashboard": {
+      "get": {
+        "tags": ["Administración"],
+        "summary": "Dashboard de riesgo",
+        "description": "Resumen general del estado del sistema: contadores de objetos por estado y lista de préstamos atrasados con datos del alumno responsable. **Solo Admin.**",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Resumen del sistema",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "success",
+                  "data": {
+                    "resumen": {
+                      "disponibles": 45,
+                      "en_prestamo": 3,
+                      "atrasados": 1,
+                      "mantenimiento": 1
+                    },
+                    "prestamos_atrasados": [
+                      {
+                        "id": 2,
+                        "fecha_devolucion_esperada": "2026-02-20T00:00:00Z",
+                        "user": { "name": "Carlos López", "email": "carlos@test.com" },
+                        "item": { "nombre": "Cámara Sony A7" }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "No autenticado" },
+          "403": { "description": "Acceso denegado — se requiere rol admin" }
+        }
+      }
+    }
+  }
+}
